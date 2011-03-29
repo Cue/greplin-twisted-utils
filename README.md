@@ -54,7 +54,7 @@ Utilities for dealing with twisted.internet.Deferred objects.
   * DNS cache - avoid repeatedly resolving the same DNS names
 
 
-### greplin.testing
+#### greplin.testing
 
   * Mock implementation of greplin.defer.time
 
