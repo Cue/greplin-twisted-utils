@@ -31,8 +31,6 @@ and patches are very much appreciated!
 
 #### greplin.defer
 
-Utilities for dealing with twisted.internet.Deferred objects.
-
   * Context management - allows setting context variables that persist across asynchronous events.  This is highly
     experimental!
 
