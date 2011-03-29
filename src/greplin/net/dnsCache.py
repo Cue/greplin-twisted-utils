@@ -14,7 +14,6 @@
 
 """DNS resolver that uses a short lived local cache to improve performance."""
 
-from greplin import stats
 from greplin.defer import lazymap
 
 from twisted.internet import defer, interfaces
@@ -31,15 +30,7 @@ class CachingDNS(object):
   implements(interfaces.IResolverSimple)
 
 
-  fetchesStat = stats.IntStat('fetches')
-
-  requestsStat = stats.IntStat('requests')
-
-  countByNameStat = stats.IntDictStat('countByName')
-
-
   def __init__(self, original, timeout = 60):
-    stats.init(self, '/dns')
     self._original = original
     self._timeout = timeout
     self._cache = lazymap.DeferredMap(self.__fetchHost)
