@@ -17,6 +17,7 @@
 from greplin.defer import time
 
 from twisted.internet import defer
+from twisted.python import failure
 
 
 def retryCall(fn, args=None, keywordArgs=None, failureTester=None, sleepManager=None):
@@ -69,6 +70,6 @@ class RetryingCall(defer.Deferred):
 
     # pylint: disable=W0702
     except:
-      self.errback(err)
+      self.errback(failure.Failure())
     else:
       self.__sleepManager.sleep().addCallback(self.__tryCall)
