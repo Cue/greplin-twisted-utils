@@ -34,13 +34,13 @@ def wrapDeferred(deferred, ignore = None, onError = None, onSuccess = None, onCo
     if isinstance(result, failure.Failure):
       if ignore and result.check(*ignore):
         result = None
-      else:
+      elif onError:
         result = onError(result)
 
     elif onSuccess:
       result = onSuccess(result)
 
-    return onComplete(result)
+    return onComplete(result) if onComplete else result
 
 
   def addEndOfChainCallback(result):
