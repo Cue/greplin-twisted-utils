@@ -125,3 +125,46 @@ class DeferredMapTest(unittest.TestCase):
 
     self.__results[-1].errback(TypeError("AN ERROR"))
     self.assertLog(("AN ERROR", '20A', 'error'))
+
+
+  def testPut(self):
+    """Test performing a proactive put operation."""
+    self.__map[100] = 'hundo'
+    self.assertEquals('hundo', self.__map[100])
+
+
+  def testPutOverride(self):
+    """Test overriding a normal put with a proactive put operation."""
+    result = self.__map[100]
+    self.assertTrue(isinstance(result, defer.Deferred))
+
+    self.__map[100] = 'hundo'
+    self.assertTrue(result.called)
+    self.assertEquals('hundo', result.result)
+    self.assertEquals('hundo', self.__map[100])
+
+    self.__results.pop().callback('hundred')
+    self.assertEquals('hundo', self.__map[100])
+
+
+  def testRefresh(self):
+    """Test refreshing a result."""
+    self.__map.refresh(100) # Should do nothing.
+
+    self.__map[100] = 'hundo'
+    self.assertEquals('hundo', self.__map[100])
+
+    self.__map.refresh(100)
+    self.testBasics()
+
+
+  def testRefreshDuringLoad(self):
+    """Test refreshing a result that is pending."""
+    result = self.__map[100]
+    self.assertTrue(isinstance(result, defer.Deferred))
+
+    self.__map.refresh(100)
+
+    self.__results.pop().callback('hundo')
+    self.assertTrue(result.called)
+    self.assertEquals('hundo', result.result)

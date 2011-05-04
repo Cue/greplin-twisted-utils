@@ -28,6 +28,12 @@ class DeferredMap(dict):
     self.__loading = {}
 
 
+  def refresh(self, key):
+    """Forces a refresh of the given item.  If it is currently loading or not loaded, this does nothing."""
+    if key in self and not isinstance(dict.__getitem__(self, key), defer.Deferred):
+      dict.__delitem__(self, key)
+
+
   def __getitem__(self, key):
     """Override getitem to lazily load items.  Returns a deferred if the item is not ready, or the item otherwise."""
     if key in self:
@@ -42,24 +48,35 @@ class DeferredMap(dict):
     self.__loading[key].append(result)
 
     if isNewRequest:
-      self.__fn(key).addCallback(self.__gotItem, key).addErrback(self.__err, key)
+      self.__fn(key).addBoth(self.__gotResult, key)
 
     return result
 
 
-  def __gotItem(self, value, key):
-    """Handle successful item retrieval."""
-    self[key] = value
-    observers = self.__loading[key]
-    del self.__loading[key]
-    for observer in observers:
-      observer.callback(value)
+  def __isActive(self, key):
+    """Checks if the given key is active."""
+    return self.__loading.get(key)
 
 
-  def __err(self, err, key):
-    """Handle an error in fn."""
-    self[key] = err
-    observers = self.__loading[key]
-    del self.__loading[key]
-    for observer in observers:
-      observer.errback(err)
+  def __set(self, key, result):
+    """Calls back the observers for the given key."""
+    dict.__setitem__(self, key, result)
+    observers = self.__loading.get(key)
+    if observers:
+      del self.__loading[key]
+      for observer in observers:
+        observer.callback(result)
+
+
+  def __setitem__(self, key, value):
+    """Proactively sets an item. If the item was loading, any callbacks are called and loading will be canceled."""
+    oldValue = key in self and dict.__getitem__(self, key)
+    self.__set(key, value)
+    if isinstance(oldValue, defer.Deferred):
+      oldValue.cancel()
+
+
+  def __gotResult(self, result, key):
+    """Handle a result."""
+    if self.__isActive(key):
+      self.__set(key, result)
