@@ -51,7 +51,8 @@ class MockSleep(object):
     return self
 
 
-  def __exit__(self, _, __, ___):
+  def __exit__(self, excType, __, ___):
     """Restores the real time class."""
     time.sleep = self.__oldSleep
-    assert not self.__queue, "Queue not empty: %s" % self.__queue
+    if not excType:
+      assert not self.__queue, "Queue not empty: %s" % self.__queue
