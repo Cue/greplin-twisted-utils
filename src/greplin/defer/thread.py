@@ -44,6 +44,7 @@ class AsyncThread(object):
     self.children = []
     self.frames = []
     self.name = name
+    self.locals = {}
 
 
   def _externalFrame(self):
@@ -87,6 +88,17 @@ class AsyncThread(object):
     self.frames.pop()
     if self.frames:
       self.frames[-1].top = None
+
+
+  def setLocal(self, key, value):
+    """Sets a thread local."""
+    self.locals[key] = value
+
+
+  def getLocal(self, key):
+    """Gets a thread local."""
+    return self.locals.get(key)
+
 
 
 AsyncThread.currentThread = AsyncThread('ROOT')
@@ -219,3 +231,18 @@ def async(f):
 def stacktrace():
   """Dumps the current stacktrace as a string."""
   return AsyncThread.currentThread.getStackTrace()
+
+
+def getLocal(key):
+  """Gets a thread local value."""
+  return AsyncThread.currentThread.getLocal(key)
+
+
+def getLocals():
+  """Gets all thread local values."""
+  return AsyncThread.currentThread.locals
+
+
+def setLocal(key, value):
+  """Sets a thread local value."""
+  return AsyncThread.currentThread.setLocal(key, value)
