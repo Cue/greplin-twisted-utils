@@ -16,37 +16,48 @@
 """PROTOTYPE: Demo of better stacktraces for async calls.  Based on defer.inlineCallbacks."""
 
 from greplin.defer import time
-from greplin.defer.thread import async, stacktrace
+from greplin.defer.thread import install, stacktrace, AsyncFrame
+install()
 
-from twisted.internet import reactor
+from twisted.internet import defer, reactor
 
 
-@async
+
+@defer.inlineCallbacks
 def demo():
   """Main demo function."""
   yield countdown(4)
 
 
-@async
+@defer.inlineCallbacks
 def countdown(i):
   """Countdown function to generate chained asynchronous calls."""
   if not i:
     reactor.stop()
     return
 
-  print 'i is %d' % i
+  print 'i is %d with frame %s' % (i, AsyncFrame.currentFrame.getName())
 
   yield time.sleep(0.01)
 
-  print 'done sleeping'
+  print 'done sleeping with frame %s' % AsyncFrame.currentFrame.getName()
 
-  nestAndPrint()
+  if i % 2:
+    nestAndPrint()
+    yield dispatchOdd(i - 1)
+  else:
+    print stacktrace()
+    yield dispatchEven(i - 1)
 
-  yield anotherFunction(i - 1)
+
+@defer.inlineCallbacks
+def dispatchEven(i):
+  """Another function to try to make this even more interesting."""
+  yield countdown(i)
 
 
-@async
-def anotherFunction(i):
+@defer.inlineCallbacks
+def dispatchOdd(i):
   """Another function to try to make this even more interesting."""
   yield countdown(i)
 

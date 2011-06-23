@@ -14,235 +14,228 @@
 
 """PROTOTYPE: Better stacktraces for async calls.  Based on defer.inlineCallbacks."""
 
-from twisted.internet.defer import Deferred
-from twisted.python import failure
+from twisted.internet import reactor, threads
+from twisted.python import log
 
-import functools
 import inspect
+import itertools
 import sys
-import warnings
+import weakref
+
+
+# TODO: monkey patch tracebacks
+# TODO: how to handle exception tracebacks?
+# TODO: create thread browser
+# TODO: performance impact?
+
+
+ID_GENERATOR = itertools.count(1)
 
 
 
 class AsyncFrame(object):
   """Represents a single async call frame."""
 
-  def __init__(self, frame):
-    self.bottom = frame
-    self.top = None
+  currentFrame = None
 
 
+  def __init__(self, parent, frame):
+    self.parent = parent
+    self.children = weakref.WeakKeyDictionary()
 
-class AsyncThread(object):
-  """An asynchronous "thread"."""
-
-  currentThread = None
-
-
-  def __init__(self, name):
-    self.parent = AsyncThread.currentThread
-    self.children = []
     self.frames = []
-    self.name = name
-    self.locals = {}
+    if frame:
+      while frame and frame != AsyncFrame.currentFrame.reentry:
+        self.frames.append(inspect.getframeinfo(frame))
+        frame = frame.f_back
+
+    self.reentry = None
+
+    self.locals = None
 
 
-  def _externalFrame(self):
-    """Gets the first frame outside of this module."""
-    pythonFrame = inspect.currentframe()
-    while id(pythonFrame.f_globals) == id(globals()):
-      pythonFrame = pythonFrame.f_back
-    return pythonFrame
+  def createChild(self):
+    """Creates a child frame."""
+    frame = AsyncFrame(self, _externalFrame())
+    self.children[frame] = 1
+    return frame
 
 
-  def _getStackTrace(self):
-    """Gets a stack trace for this thread."""
-    result = []
-    for asyncFrame in reversed(self.frames):
-      pythonFrame = asyncFrame.top or self._externalFrame()
-      while pythonFrame and pythonFrame != asyncFrame.bottom and id(pythonFrame.f_globals) != id(globals()):
-        frameInfo = inspect.getframeinfo(pythonFrame)
-        result.extend(reversed(['  %s' % x for x in frameInfo.code_context]))
-        result.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
-        pythonFrame = pythonFrame.f_back
-    return ''.join(reversed(result))
+  def getName(self):
+    """Returns the name of this frame, generating one if necessary."""
+    if not self.locals or 'name' not in self.locals:
+      self.setName('Frame %d' % ID_GENERATOR.next())
+    return self.getLocal('name')
 
 
-  def getStackTrace(self):
-    """Gets a stacktrace for this thread merged with its parent threads."""
-    if self.parent:
-      return '\n'.join((self.parent.getStackTrace(), self._getStackTrace()))
-    else:
-      return self._getStackTrace()
-
-
-  def pushFrame(self):
-    """Pushes a new frame."""
-    if self.frames:
-      self.frames[-1].top = self._externalFrame()
-    self.frames.append(AsyncFrame(inspect.currentframe().f_back))
-
-
-  def popFrame(self):
-    """Pops a frame."""
-    self.frames.pop()
-    if self.frames:
-      self.frames[-1].top = None
+  def setName(self, name):
+    """Sets the name of this frame."""
+    self.setLocal('name', name)
 
 
   def setLocal(self, key, value):
-    """Sets a thread local."""
+    """Sets a value that is local to this frame or its ancestors."""
+    self.locals = self.locals or {}
     self.locals[key] = value
 
 
   def getLocal(self, key):
-    """Gets a thread local."""
-    return self.locals.get(key)
+    """Gets a value that is local to this frame or its ancestors."""
+    if self.locals and key in self.locals:
+      return self.locals[key]
+    elif self.parent:
+      return self.parent.getLocal(key)
+
+
+  def getLocals(self):
+    """Gets all locals from this frame and its ancestors."""
+    if self.parent:
+      combination = self.parent.getLocals()
+    else:
+      combination = {}
+    if self.locals:
+      combination.update(self.locals)
+    return combination
 
 
 
-AsyncThread.currentThread = AsyncThread('ROOT')
+AsyncFrame.currentFrame = AsyncFrame(None, None)
+AsyncFrame.currentFrame.setName('ROOT')
 
 
-
-class _AsyncReturn(BaseException):
-  """Return value. """
-
-  def __init__(self, value):
-    BaseException.__init__(self)
-    self.value = value
-
-
-def returnValue(value):
-  """Return value from an L{async} generator."""
-  raise _AsyncReturn(value)
-
-
-def _async(result, generator, deferred, thread):
-  """See L{async}."""
-
-  AsyncThread.currentThread = thread
-
-  waiting = [True, # waiting for result?
-             None] # result
-
-  while 1:
-    try:
-      # Send the last result back as the result of the yield expression.
-      isFailure = isinstance(result, failure.Failure)
-      if isFailure:
-        result = result.throwExceptionIntoGenerator(generator)
-      else:
-        result = generator.send(result)
-    except StopIteration:
-      # fell off the end, or "return" statement
-      deferred.callback(None)
-      return deferred
-    except _AsyncReturn, e:
-      _checkBadReturnValue(sys.exc_info(), isFailure)
-      deferred.callback(e.value)
-      return deferred
-    except:
-      deferred.errback()
-      return deferred
-
-    if isinstance(result, Deferred):
-      # a deferred was yielded, get the result.
-      def gotResult(r):
-        """Called when a deferred finishes."""
-        thread.popFrame()
-        if waiting[0]:
-          waiting[0] = False
-          waiting[1] = r
-        else:
-          _async(r, generator, deferred, thread)
-
-      thread.pushFrame()
-      result.addBoth(gotResult)
-      if waiting[0]:
-        # Haven't called back yet, set flag so that we get reinvoked
-        # and return from the loop
-        waiting[0] = False
-        return deferred
-
-      result = waiting[1]
-      # Reset waiting to initial values for next loop.  gotResult uses
-      # waiting, but this isn't a problem because gotResult is only
-      # executed once, and if it hasn't been executed yet, the return
-      # branch above would have been taken.
-
-      waiting[0] = True
-      waiting[1] = None
-
-  return deferred
-
-
-def _checkBadReturnValue(exc, isFailure):
-  """Checks for a bad return value."""
-
-  # returnValue() was called; time to give a result to the original
-  # Deferred.  First though, let's try to identify the potentially
-  # confusing situation which results when returnValue() is
-  # accidentally invoked from a different function, one that wasn't
-  # decorated with @inlineCallbacks.
-
-  # The traceback starts in this frame (the one for
-  # _inlineCallbacks); the next one down should be the application
-  # code.
-  appCodeTrace = exc[2].tb_next
-  if isFailure:
-    # If we invoked this generator frame by throwing an exception
-    # into it, then throwExceptionIntoGenerator will consume an
-    # additional stack frame itself, so we need to skip that too.
-    appCodeTrace = appCodeTrace.tb_next
-  # Now that we've identified the frame being exited by the
-  # exception, let's figure out if returnValue was called from it
-  # directly.  returnValue itself consumes a stack frame, so the
-  # application code will have a tb_next, but it will *not* have a
-  # second tb_next.
-  if appCodeTrace.tb_next.tb_next:
-    # If returnValue was invoked non-local to the frame which it is
-    # exiting, identify the frame that ultimately invoked
-    # returnValue so that we can warn the user, as this behavior is
-    # confusing.
-    ultimateTrace = appCodeTrace
-    while ultimateTrace.tb_next.tb_next:
-      ultimateTrace = ultimateTrace.tb_next
-    filename = ultimateTrace.tb_frame.f_code.co_filename
-    lineno = ultimateTrace.tb_lineno
-    warnings.warn_explicit(
-        'returnValue() in %r causing %r to exit: '
-        'returnValue should only be invoked by functions decorated with async' %
-        (ultimateTrace.tb_frame.f_code.co_name, appCodeTrace.tb_frame.f_code.co_name),
-        DeprecationWarning, filename, lineno)
-
-
-def async(f):
-  """Wraps the given function, allowing use of the yield keyword to make asynchronous code look synchronous."""
-  @functools.wraps(f)
-  def unwindGenerator(*args, **kwargs):
-    """Decorated version that returns the generator and sets it up to be processed asynchronously."""
-    return _async(None, f(*args, **kwargs), Deferred(), AsyncThread.currentThread)
-
-
-  return unwindGenerator
+def _externalFrame():
+  """Gets the first frame outside of this module."""
+  pythonFrame = inspect.currentframe()
+  while id(pythonFrame.f_globals) == id(globals()):
+    pythonFrame = pythonFrame.f_back
+  return pythonFrame
 
 
 def stacktrace():
-  """Dumps the current stacktrace as a string."""
-  return AsyncThread.currentThread.getStackTrace()
+  """Gets a stack trace for this thread."""
+  result = []
+  asyncFrame = AsyncFrame.currentFrame.createChild()
+  while asyncFrame:
+    for frameInfo in asyncFrame.frames:
+      if not frameInfo.filename.endswith('twisted/internet/defer.py'):
+        result.extend(reversed(['      %s\n' % x.strip() for x in frameInfo.code_context]))
+      result.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
+    result.append('--- async ---\n')
+    asyncFrame = asyncFrame.parent
+  return ''.join(reversed(result))
+
+
+def getCurrentFrame():
+  """Gets the current frame."""
+  return AsyncFrame.currentFrame
 
 
 def getLocal(key):
   """Gets a thread local value."""
-  return AsyncThread.currentThread.getLocal(key)
+  return AsyncFrame.currentFrame.getLocal(key)
 
 
 def getLocals():
   """Gets all thread local values."""
-  return AsyncThread.currentThread.locals
+  return AsyncFrame.currentFrame.getLocals()
 
 
 def setLocal(key, value):
   """Sets a thread local value."""
-  return AsyncThread.currentThread.setLocal(key, value)
+  return AsyncFrame.currentFrame.setLocal(key, value)
+
+
+# ------------------------------- #
+# Beware - monkey patching ahead. #
+# ------------------------------- #
+
+
+# Now we define a utility function for wrapping a function to restore the current frame.
+
+def wrapped(fn):
+  """Returns a wrapped version of fn that installs the current context and then calls fn."""
+  frame = AsyncFrame.currentFrame.createChild()
+
+  def wrappedFn(*args, **kw):
+    """Wrapped version of the function."""
+    AsyncFrame.currentFrame = frame
+    frame.reentry = inspect.currentframe()
+    fn(*args, **kw)
+
+  return wrappedFn
+
+
+
+# Define the patched reactor.
+
+# pylint: disable=C0103
+BaseReactor = type(reactor)
+
+
+
+class FrameTrackingReactor(BaseReactor):
+  """Adds frame tracking to the reactor."""
+
+
+  def addReader(self, reader):
+    """Overrides addReader to attach the current context."""
+    reader.__frame = AsyncFrame.currentFrame.createChild()
+    BaseReactor.addReader(self, reader)
+
+
+  def addWriter(self, writer):
+    """Overrides addWriter to attach the current context."""
+    writer.__frame = AsyncFrame.currentFrame.createChild()
+    BaseReactor.addWriter(self, writer)
+
+
+  # pylint: disable=C0103
+  def _doReadOrWrite(self, selectable, *args, **kw):
+    """Overrides _doReadOrWrite to restore the context at the time of selectable creation."""
+    # pylint: disable=W0212
+    AsyncFrame.currentFrame.reentry = inspect.currentframe()
+    BaseReactor._doReadOrWrite(self, selectable, *args, **kw)
+
+
+  def callLater(self, _seconds, _f, *args, **kw):
+    """Wraps call later functions with the context."""
+    return BaseReactor.callLater(self, _seconds, wrapped(_f), *args, **kw)
+
+
+# Last piece of the official API - function to install the patches.
+
+def install():
+  """Install the context tracking reactor."""
+
+  # Install logging patches.
+  originalFormatter = log.textFromEventDict
+
+  def newFormatter(*args, **kw):
+    """Augmented log formatter that includes context information."""
+    originalResult = originalFormatter(*args, **kw)
+    values = AsyncFrame.currentFrame.getLocals()
+    if values:
+      originalResult += ' %r' % values
+    return originalResult
+
+  log.textFromEventDict = newFormatter
+
+
+  # Patch threads.deferToThread(Pool)
+  originalDeferToThreadPool = threads.deferToThreadPool
+
+  def deferToThreadPool(*args, **kw):
+    """Patches defer to thread pool to install the context when running the callback."""
+    deferred = originalDeferToThreadPool(*args, **kw)
+    # pylint: disable=W0212
+    deferred._startRunCallbacks = wrapped(deferred._startRunCallbacks)
+    return deferred
+
+  threads.deferToThreadPool = deferToThreadPool
+
+
+  # Overwrite the reactor.
+  del sys.modules['twisted.internet.reactor']
+  r = FrameTrackingReactor()
+  from twisted.internet.main import installReactor
+  installReactor(r)
