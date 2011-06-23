@@ -14,8 +14,8 @@
 
 """Net enabled tests for context tracking."""
 
-from greplin.defer import context, time
-context.install()
+from greplin.defer import thread, time
+thread.install()
 
 from twisted.internet import defer, threads
 from twisted.web import client
@@ -31,39 +31,38 @@ class ContextTrackerTest(unittest.TestCase):
   @defer.inlineCallbacks
   def testInlineCallbacks(self):
     """Test context saving across I/O."""
-    with context.set(someValue = 12345):
+    with thread.locals(someValue = 12345):
       yield time.sleep(0.001)
-      self.assertFalse(context.has('anotherValue'))
-      self.assertEqual(12345, context.get('someValue'))
-      self.assertTrue(context.has('someValue'))
+      self.assertEqual(None, thread.getLocal('anotherValue'))
+      self.assertEqual(12345, thread.getLocal('someValue'))
 
-      with context.set(anotherValue = 'abcde'):
+      with thread.locals(anotherValue = 'abcde'):
         yield client.getPage('http://greplin.com')
-        self.assertEqual('abcde', context.get('anotherValue'))
-        self.assertEqual(12345, context.get('someValue'))
+        self.assertEqual('abcde', thread.getLocal('anotherValue'))
+        self.assertEqual(12345, thread.getLocal('someValue'))
 
       yield threads.deferToThread(lambda: None)
-      self.assertFalse(context.has('anotherValue'))
-      self.assertEqual(12345, context.get('someValue'))
-      self.assertTrue(context.has('someValue'))
+      self.assertEqual(None, thread.getLocal('anotherValue'))
+      self.assertEqual(12345, thread.getLocal('someValue'))
 
-    self.assertFalse(context.has('someValue'))
+    self.assertEqual(None, thread.getLocal('someValue'))
 
 
   def testFromRequest(self):
     """Test saving context across a socket request."""
-    with context.set(source = 'page'):
-      return client.getPage('http://greplin.com').addCallback(lambda _: self.assertEqual('page', context.get('source')))
+    with thread.locals(source = 'page'):
+      return client.getPage('http://greplin.com').addCallback(
+          lambda _: self.assertEqual('page', thread.getLocal('source')))
 
 
   def testFromThread(self):
     """Test saving context across a thread deferment."""
-    with context.set(source = 'thread'):
+    with thread.locals(source = 'thread'):
       return threads.deferToThread(lambda: None). \
-          addCallback(lambda _: self.assertEqual('thread', context.get('source')))
+          addCallback(lambda _: self.assertEqual('thread', thread.getLocal('source')))
 
 
   def testFromDelay(self):
     """Test saving context across a delayed call."""
-    with context.set(source = 'delay'):
-      return time.sleep(0.001).addCallback(lambda _: self.assertEqual('delay', context.get('source')))
+    with thread.locals(source = 'delay'):
+      return time.sleep(0.001).addCallback(lambda _: self.assertEqual('delay', thread.getLocal('source')))

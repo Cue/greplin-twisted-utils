@@ -25,7 +25,6 @@ import weakref
 
 # TODO: monkey patch tracebacks
 # TODO: how to handle exception tracebacks?
-# TODO: create thread browser
 # TODO: performance impact?
 
 
@@ -37,6 +36,8 @@ class AsyncFrame(object):
   """Represents a single async call frame."""
 
   currentFrame = None
+
+  byName = weakref.WeakValueDictionary()
 
 
   def __init__(self, parent, frame):
@@ -77,6 +78,8 @@ class AsyncFrame(object):
     """Sets a value that is local to this frame or its ancestors."""
     self.locals = self.locals or {}
     self.locals[key] = value
+    if key == 'name':
+      AsyncFrame.byName[value] = self
 
 
   def getLocal(self, key):
@@ -98,8 +101,21 @@ class AsyncFrame(object):
     return combination
 
 
+  def stacktrace(self):
+    """Generates a stacktrace."""
+    result = []
+    asyncFrame = self
+    while asyncFrame:
+      for frameInfo in asyncFrame.frames:
+        if not frameInfo.filename.endswith('twisted/internet/defer.py'):
+          result.extend(reversed(['      %s\n' % x.strip() for x in frameInfo.code_context]))
+        result.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
+      result.append('--- async %s ---\n' % asyncFrame.getName())
+      asyncFrame = asyncFrame.parent
+    return ''.join(reversed(result))
 
-AsyncFrame.currentFrame = AsyncFrame(None, None)
+
+ROOT_FRAME = AsyncFrame.currentFrame = AsyncFrame(None, None)
 AsyncFrame.currentFrame.setName('ROOT')
 
 
@@ -113,16 +129,7 @@ def _externalFrame():
 
 def stacktrace():
   """Gets a stack trace for this thread."""
-  result = []
-  asyncFrame = AsyncFrame.currentFrame.createChild()
-  while asyncFrame:
-    for frameInfo in asyncFrame.frames:
-      if not frameInfo.filename.endswith('twisted/internet/defer.py'):
-        result.extend(reversed(['      %s\n' % x.strip() for x in frameInfo.code_context]))
-      result.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
-    result.append('--- async ---\n')
-    asyncFrame = asyncFrame.parent
-  return ''.join(reversed(result))
+  return AsyncFrame.currentFrame.createChild().stacktrace()
 
 
 def getCurrentFrame():
@@ -143,6 +150,36 @@ def getLocals():
 def setLocal(key, value):
   """Sets a thread local value."""
   return AsyncFrame.currentFrame.setLocal(key, value)
+
+
+
+class Locals(object):
+  """Represents a set of locals."""
+
+  currentContext = None
+
+
+  def __init__(self, values = None):
+    self.parent = None
+    self.values = values
+
+
+  def __enter__(self):
+    """Enters this context."""
+    AsyncFrame.currentFrame = AsyncFrame.currentFrame.createChild()
+    for key, value in self.values.items():
+      AsyncFrame.currentFrame.setLocal(key, value)
+
+
+  def __exit__(self, *_):
+    """Leaves this context."""
+    AsyncFrame.currentFrame = AsyncFrame.currentFrame.parent
+
+
+def locals(**values): # pylint: disable=W0622
+  """Sets thread locals in a context."""
+  return Locals(values)
+
 
 
 # ------------------------------- #
