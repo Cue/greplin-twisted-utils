@@ -30,8 +30,9 @@ class ThreadsResource(resource.Resource):
     else:
       asyncFrame = thread.ROOT_FRAME
 
-    while len(asyncFrame.children) == 1:
-      asyncFrame = iter(asyncFrame.children).next()
+    if 'exact' not in request.args:
+      while len(asyncFrame.children) == 1:
+        asyncFrame = iter(asyncFrame.children).next()
 
     ancestors = []
     ancestor = asyncFrame.parent
@@ -40,13 +41,15 @@ class ThreadsResource(resource.Resource):
       ancestor = ancestor.parent
 
     for ancestor in reversed(ancestors):
-      request.write('<a href="?name=%s">%s</a> ' % (cgi.escape(urllib.quote(ancestor.getName())), ancestor.getName()))
+      request.write('<a href="?exact=1&name=%s">%s</a> ' % (
+          cgi.escape(urllib.quote(ancestor.getName())), ancestor.getName()))
 
     request.write('<h1>%s</h1>' % asyncFrame.getName())
-    request.write('<pre>%s</pre>' % cgi.escape(asyncFrame.stacktrace()))
 
     for child in asyncFrame.children:
       request.write('<p><a href="?name=%s">%s</a></p>' % (
           cgi.escape(urllib.quote(child.getName())), child.getName()))
+
+    request.write('<pre>%s</pre>' % cgi.escape(asyncFrame.stacktrace(reverse = True)))
 
     return ''

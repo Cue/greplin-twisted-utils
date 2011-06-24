@@ -40,7 +40,7 @@ class AsyncFrame(object):
   byName = weakref.WeakValueDictionary()
 
 
-  def __init__(self, parent, frame):
+  def __init__(self, parent, frame, kind = 'Frame'):
     self.parent = parent
     self.children = weakref.WeakKeyDictionary()
 
@@ -54,10 +54,12 @@ class AsyncFrame(object):
 
     self.locals = None
 
+    self.kind = kind
 
-  def createChild(self):
+
+  def createChild(self, kind = 'Frame'):
     """Creates a child frame."""
-    frame = AsyncFrame(self, _externalFrame())
+    frame = AsyncFrame(self, _externalFrame(), kind)
     self.children[frame] = 1
     return frame
 
@@ -65,7 +67,7 @@ class AsyncFrame(object):
   def getName(self):
     """Returns the name of this frame, generating one if necessary."""
     if not self.locals or 'name' not in self.locals:
-      self.setName('Frame %d' % ID_GENERATOR.next())
+      self.setName('%s %d' % (self.kind, ID_GENERATOR.next()))
     return self.getLocal('name')
 
 
@@ -101,18 +103,20 @@ class AsyncFrame(object):
     return combination
 
 
-  def stacktrace(self):
+  def stacktrace(self, reverse = False):
     """Generates a stacktrace."""
     result = []
     asyncFrame = self
     while asyncFrame:
       for frameInfo in asyncFrame.frames:
+        frameLines = []
         if not frameInfo.filename.endswith('twisted/internet/defer.py'):
-          result.extend(reversed(['      %s\n' % x.strip() for x in frameInfo.code_context]))
-        result.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
+          frameLines.extend(reversed(['      %s\n' % x.strip() for x in frameInfo.code_context]))
+        frameLines.append('  File "%s", line %d, in %s\n' % (frameInfo.filename, frameInfo.lineno, frameInfo.function))
+        result.extend(reversed(frameLines) if reverse else frameLines)
       result.append('--- async %s ---\n' % asyncFrame.getName())
       asyncFrame = asyncFrame.parent
-    return ''.join(reversed(result))
+    return ''.join(result if reverse else reversed(result))
 
 
 ROOT_FRAME = AsyncFrame.currentFrame = AsyncFrame(None, None)
@@ -166,7 +170,7 @@ class Locals(object):
 
   def __enter__(self):
     """Enters this context."""
-    AsyncFrame.currentFrame = AsyncFrame.currentFrame.createChild()
+    AsyncFrame.currentFrame = AsyncFrame.currentFrame.createChild('Set Locals')
     for key, value in self.values.items():
       AsyncFrame.currentFrame.setLocal(key, value)
 
@@ -189,9 +193,9 @@ def locals(**values): # pylint: disable=W0622
 
 # Now we define a utility function for wrapping a function to restore the current frame.
 
-def wrapped(fn):
+def wrapped(fn, kind):
   """Returns a wrapped version of fn that installs the current context and then calls fn."""
-  frame = AsyncFrame.currentFrame.createChild()
+  frame = AsyncFrame.currentFrame.createChild(kind)
 
   def wrappedFn(*args, **kw):
     """Wrapped version of the function."""
@@ -216,13 +220,13 @@ class FrameTrackingReactor(BaseReactor):
 
   def addReader(self, reader):
     """Overrides addReader to attach the current context."""
-    reader.__frame = AsyncFrame.currentFrame.createChild()
+    reader.__frame = AsyncFrame.currentFrame.createChild('Reader')
     BaseReactor.addReader(self, reader)
 
 
   def addWriter(self, writer):
     """Overrides addWriter to attach the current context."""
-    writer.__frame = AsyncFrame.currentFrame.createChild()
+    writer.__frame = AsyncFrame.currentFrame.createChild('Writer')
     BaseReactor.addWriter(self, writer)
 
 
@@ -236,7 +240,7 @@ class FrameTrackingReactor(BaseReactor):
 
   def callLater(self, _seconds, _f, *args, **kw):
     """Wraps call later functions with the context."""
-    return BaseReactor.callLater(self, _seconds, wrapped(_f), *args, **kw)
+    return BaseReactor.callLater(self, _seconds, wrapped(_f, 'Timer'), *args, **kw)
 
 
 # Last piece of the official API - function to install the patches.
@@ -265,7 +269,7 @@ def install():
     """Patches defer to thread pool to install the context when running the callback."""
     deferred = originalDeferToThreadPool(*args, **kw)
     # pylint: disable=W0212
-    deferred._startRunCallbacks = wrapped(deferred._startRunCallbacks)
+    deferred._startRunCallbacks = wrapped(deferred._startRunCallbacks, 'Thread')
     return deferred
 
   threads.deferToThreadPool = deferToThreadPool
