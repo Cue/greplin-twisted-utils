@@ -41,7 +41,7 @@ class RetryingCall(defer.Deferred):
   """Class storing necessary data for a retrying call."""
 
   def __init__(self, fn, failureTester, sleepManager, args, keywordArgs):
-    defer.Deferred.__init__(self)
+    defer.Deferred.__init__(self, self._cancelCleanly)
     self.__fn = fn
     self.__failureTester = failureTester
     self.__sleepManager = sleepManager or time.SleepManager()
@@ -49,6 +49,19 @@ class RetryingCall(defer.Deferred):
     self.__keywordArgs = keywordArgs or {}
     self.__currentTry = None
     self.__tryCall()
+
+
+
+  def _cancelCleanly(self, *_, **__):
+    """
+    Cancelled requests will throw a CancelledError wherever they were
+    initiated from if they haven't yet been called. That means the canceller
+    won't always be able to respond to the error (which makes HttpClient.stop a
+    problem). Instead, we just mark any cancelled requests as having been
+    called.
+    """
+
+    self.called = True
 
 
   def __tryCall(self, _=None):
