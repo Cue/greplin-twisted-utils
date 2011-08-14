@@ -38,14 +38,11 @@ class CachingDNS(object):
 
   def __fetchHost(self, args):
     """Actually fetches the host name."""
-    self.fetchesStat += 1
     return self._original.getHostByName(*args).addCallback(lambda x: (x, time.time()))
 
 
   def getHostByName(self, name, *args):
     """Gets a host by name."""
-    self.countByNameStat[name] += 1
-    self.requestsStat += 1
     key = (name,) + args
     if key in self._cache:
       # If we failed last time, try again
