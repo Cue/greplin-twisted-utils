@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Twisted database improvements."""
+"""Twisted database connection pools."""
 
 from twisted.enterprise import adbapi
 from twisted.python import log
