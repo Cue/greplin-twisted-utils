@@ -16,6 +16,8 @@
 
 from twisted.internet import defer
 
+import random
+
 
 def sleep(seconds):
   """
@@ -56,10 +58,20 @@ def timeoutDeferred(seconds, deferred):
 class SleepManager(object):
   """Manages the amount of time to sleep between iterations of a task."""
 
-  def __init__(self, minSleep = 60, maxSleep = 60 * 10, increment = 60):
+  def __init__(self, minSleep = 60, maxSleep = 60 * 10, increment = 60, jitter = 0):
+    """Initializes the SleepManager.
+
+    Args:
+      minSleep: the starting amount of seconds to sleep
+      maxSleep: the maximum amount of seconds to sleep
+      increment: the number of seconds to increase the delay each time
+      jitter: if non-zero, a random floating point number of seconds up to this number will be added to the delay.
+              This is useful to help prevent many separate SleepManager objects from getting in sync.
+    """
     self.__minSleep = minSleep
     self.__maxSleep = maxSleep
     self.__increment = increment
+    self.__jitter = jitter
     self.delay = self.__minSleep
 
 
@@ -72,4 +84,6 @@ class SleepManager(object):
     """Returns a deferred that sleeps the current amount of delay."""
     d = sleep(self.delay)
     self.delay = min(self.delay + self.__increment, self.__maxSleep)
+    if self.__jitter:
+      d += random.random() * self.__jitter
     return d
