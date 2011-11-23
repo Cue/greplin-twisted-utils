@@ -82,8 +82,9 @@ class SleepManager(object):
 
   def sleep(self):
     """Returns a deferred that sleeps the current amount of delay."""
-    d = sleep(self.delay)
-    self.delay = min(self.delay + self.__increment, self.__maxSleep)
+    delayTime = self.delay
     if self.__jitter:
-      d += random.random() * self.__jitter
+      delayTime += random.random() * self.__jitter
+    d = sleep(delayTime)
+    self.delay = min(self.delay + self.__increment, self.__maxSleep)
     return d
