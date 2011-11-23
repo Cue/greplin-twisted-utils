@@ -29,16 +29,24 @@ class MockSleep(object):
   __queue = []
 
 
-  def expect(self, seconds):
+  def expect(self, seconds, allowedBuffer=None):
     """Adds an expected sleep."""
-    self.__queue.append(seconds)
+    self.__queue.append((seconds, allowedBuffer))
 
 
   def __sleep(self, seconds):
     """Substitute for time.sleep."""
-    expectedSeconds = self.__queue.pop(0)
-    if expectedSeconds != seconds:
+    err = None
+    expectedSeconds, allowedBuffer = self.__queue.pop(0)
+    if allowedBuffer is not None:
+      # Expect the seconds to be between two values
+      if not (expectedSeconds + allowedBuffer > seconds > expectedSeconds - allowedBuffer):
+        err = AssertionError("Expected sleep for %s seconds (%s buffer), got %s" % (expectedSeconds, allowedBuffer,
+                                                                                    seconds))
+    elif expectedSeconds != seconds:
       err = AssertionError("Expected sleep for %s seconds, got %s" % (expectedSeconds, seconds))
+
+    if err:
       return defer.fail(failure.Failure(err))
     return defer.succeed(None)
 
