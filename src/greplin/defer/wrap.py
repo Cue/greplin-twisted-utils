@@ -17,6 +17,41 @@
 from twisted.python import failure, log
 
 
+
+class _Wrapper(object):
+  """Helper object for wrapping Deferred objects."""
+
+  __slots__ = ('deferred', 'ignore', 'onError', 'onSuccess', 'onComplete')
+
+
+  def __init__(self, deferred, ignore, onError, onSuccess, onComplete):
+    self.deferred = deferred
+    self.ignore = ignore
+    self.onError = onError
+    self.onSuccess = onSuccess
+    self.onComplete = onComplete
+
+
+  def handleResult(self, result):
+    """Handles the initial result of the deferred."""
+    self.deferred.addBoth(self.handleEndOfDeferredChain)
+    return result
+
+
+  def handleEndOfDeferredChain(self, result):
+    """Handles the end of the deferred chain."""
+    if isinstance(result, failure.Failure):
+      if self.ignore and result.check(*self.ignore):
+        result = None
+      elif self.onError:
+        result = self.onError(result)
+
+    elif self.onSuccess:
+      result = self.onSuccess(result)
+
+    return self.onComplete(result) if self.onComplete else result
+
+
 def wrapDeferred(deferred, ignore = None, onError = None, onSuccess = None, onComplete = None):
   """Log deferred errors and also ensure any error will be marked as handled.
 
@@ -28,28 +63,7 @@ def wrapDeferred(deferred, ignore = None, onError = None, onSuccess = None, onCo
 
   The result is the return value of onComplete, which is passed the result from above.
   """
-
-  def handleEndOfDeferredChain(result):
-    """Errback handler that logs, adds a callback to ignore the passed through error, and returns the error."""
-    if isinstance(result, failure.Failure):
-      if ignore and result.check(*ignore):
-        result = None
-      elif onError:
-        result = onError(result)
-
-    elif onSuccess:
-      result = onSuccess(result)
-
-    return onComplete(result) if onComplete else result
-
-
-  def addEndOfChainCallback(result):
-    """Adds a callback that will be called at the end of the callback chain."""
-    deferred.addBoth(handleEndOfDeferredChain)
-    return result
-
-
-  return deferred.addBoth(addEndOfChainCallback)
+  return deferred.addBoth(_Wrapper(deferred, ignore, onError, onSuccess, onComplete).handleResult)
 
 
 def logger(message, **context):
