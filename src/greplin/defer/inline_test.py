@@ -31,7 +31,7 @@ class InlineCallbacksTest(unittest.TestCase):
 
     @inline.callbacks
     def sleeper():
-      """Simple asynchronous function tha sleeps for a long time."""
+      """Simple asynchronous function that sleeps for a long time."""
       yield time.sleep(100)
 
     d = sleeper()
