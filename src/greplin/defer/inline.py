@@ -33,22 +33,31 @@ def callbacks(fn):
 
 
 
+STATE_NORMAL = 0
+
+STATE_WAITING = 1
+
+STATE_CANCELLED = 2
+
+
+
 class InlinedCallbacks(object):
   """Class to maintain state for an inlined callback."""
 
-  __slots__ = ('_current', 'deferred', '_generator', '_waiting')
+  __slots__ = ('_current', 'deferred', '_generator', '_state')
 
 
   def __init__(self, generator):
     self._generator = generator
     self.deferred = defer.Deferred(self._canceller)
-    self._waiting = True
+    self._state = STATE_NORMAL
     self._current = None
     self._step(None)
 
 
   def _canceller(self, _):
     """Cancel this Deferred by cancelling the current Deferred it's waiting on."""
+    self._state = STATE_CANCELLED
     self._current.cancel()
 
 
@@ -63,6 +72,10 @@ class InlinedCallbacks(object):
     # recursion.
 
     while 1:
+      if self._state == STATE_CANCELLED:
+        self.deferred.cancel()
+        return
+
       try:
         # Send the last result back as the result of the yield expression.
         if isinstance(result, failure.Failure):
@@ -71,10 +84,12 @@ class InlinedCallbacks(object):
           result = self._generator.send(result)
       except StopIteration:
         # Fell off the end, or "return" statement
-        self.deferred.callback(None)
+        if self._state != STATE_CANCELLED:
+          self.deferred.callback(None)
         return
       except defer._DefGen_Return, e: # Need to access protected member for consistency. # pylint: disable=W0212
-        self.deferred.callback(e.value)
+        if self._state != STATE_CANCELLED:
+          self.deferred.callback(e.value)
         return
       except:
         self.deferred.errback()
@@ -83,11 +98,11 @@ class InlinedCallbacks(object):
       if isinstance(result, defer.Deferred):
         # A deferred was yielded, get the result.
         self._current = result
-        self._waiting = True
+        self._state = STATE_WAITING
         result.addBoth(self._handleResult)
-        if self._waiting:
+        if self._state == STATE_WAITING:
           # Haven't called back yet, set flag so that we get reinvoked and return from the loop.
-          self._waiting = False
+          self._state = STATE_NORMAL
           return
 
         result = self._current
@@ -96,8 +111,8 @@ class InlinedCallbacks(object):
 
   def _handleResult(self, result):
     """Handles a result from a deferred."""
-    if self._waiting:
-      self._waiting = False
+    if self._state == STATE_WAITING:
+      self._state = STATE_NORMAL
       self._current = result
     else:
       self._step(result)
