@@ -12,31 +12,39 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""An event that can have many observers."""
+"""A single-fire event that can have many observers."""
+
+from greplin.defer import event
 
 from twisted.internet import defer
 
 
 
-class DeferredEvent(object):
-  """Pub-sub model for an event using Deferreds"""
+class DeferredToggle(object):
+  """A single-fire event that can have many observers."""
 
   def __init__(self):
-    self.__observers = []
+    self.__event = event.DeferredEvent()
+    self.__done = False
+    self.__result = None
 
 
   def addListener(self):
     """Adds a listener to the event, returning a deferred that will be fired the next time the event is fired."""
-    deferred = defer.Deferred()
-    self.__observers.append(deferred)
-    return deferred
+    if self.__done:
+      return defer.succeed(self.__result)
+    else:
+      return self.__event.addListener()
 
 
   def fire(self, result = None):
     """Fires the event, calling back each listener."""
-    observers = self.__observers
-    self.__observers = []
-    for observer in observers:
-      if not observer.called:
-        # Sometimes an observer is called elsewhere (for example, by a timeout).
-        observer.callback(result)
+    assert not self.__done
+    self.__done = True
+    self.__event.fire(result)
+    del self.__event
+
+
+  def isFired(self):
+    """Whether the event has already been fired."""
+    return self.__done
