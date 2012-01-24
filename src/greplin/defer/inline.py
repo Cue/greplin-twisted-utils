@@ -44,7 +44,7 @@ STATE_CANCELLED = 2
 class InlinedCallbacks(object):
   """Class to maintain state for an inlined callback."""
 
-  __slots__ = ('_current', 'deferred', '_generator', '_state')
+  __slots__ = ('_current', 'deferred', '_generator', '_state', '_creationStack')
 
 
   def __init__(self, generator):
@@ -58,7 +58,8 @@ class InlinedCallbacks(object):
   def _canceller(self, _):
     """Cancel this Deferred by cancelling the current Deferred it's waiting on."""
     self._state = STATE_CANCELLED
-    self._current.cancel()
+    if self._current:
+      self._current.cancel()
 
 
   def _step(self, result):
@@ -70,12 +71,7 @@ class InlinedCallbacks(object):
     # arising from repeatedly yielding immediately ready deferreds.  This while
     # loop and the waiting variable solve that by manually unfolding the
     # recursion.
-
-    while 1:
-      if self._state == STATE_CANCELLED:
-        self.deferred.cancel()
-        return
-
+    while self._state != STATE_CANCELLED:
       try:
         # Send the last result back as the result of the yield expression.
         if isinstance(result, failure.Failure):
@@ -95,7 +91,7 @@ class InlinedCallbacks(object):
         self.deferred.errback()
         return
 
-      if isinstance(result, defer.Deferred):
+      if self._state == STATE_NORMAL and isinstance(result, defer.Deferred):
         # A deferred was yielded, get the result.
         self._current = result
         self._state = STATE_WAITING
