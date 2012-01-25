@@ -14,12 +14,13 @@
 
 """Call that automatically retries."""
 
-from greplin.defer import time
+from greplin.defer import inline, time
 
 from twisted.internet import defer
 from twisted.python import failure
 
 
+@inline.callbacks
 def retryCall(fn, args=None, keywordArgs=None, failureTester=None, sleepManager=None):
   """Calls the given function, automatically retrying as necessary.
 
@@ -33,7 +34,14 @@ def retryCall(fn, args=None, keywordArgs=None, failureTester=None, sleepManager=
   Returns:
     A deferred that will be called on success.
   """
-  return RetryingCall(fn, failureTester, sleepManager, args, keywordArgs)
+  sleepManager = sleepManager or time.SleepManager()
+  while True:
+    try:
+      result = yield fn(*args, **keywordArgs)
+      defer.returnValue(result)
+    except Exception: # pylint: disable=W0703
+      failureTester(failure.Failure())
+      yield sleepManager.sleep()
 
 
 

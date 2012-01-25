@@ -14,7 +14,7 @@
 
 """Tests for the retry.retryCall utility function."""
 
-from greplin.defer import retry, time
+from greplin.defer import inline, retry, time
 
 from twisted.internet import defer
 from twisted.trial import unittest
@@ -79,29 +79,22 @@ class RetryCallTest(unittest.TestCase):
     err.trap(OkException)
 
 
-  def _logFailure(self, _):
-    """Logs failures."""
-    self.log.append('failed')
-
-
-  def _logResult(self, value):
-    """Logs successes."""
-    self.log.append(value)
-
-
   def checkLog(self, _, expectedLog):
     """Checks if the log matched what was expected."""
     self.assertEquals(expectedLog, self.log)
 
 
+  @inline.callbacks
   def assertLog(self, steps, expectedLog):
     """Main function - args are the result steps of the function and the expected log that results."""
     self.steps = steps
-    d = retry.retryCall(
-        self._function, self.expectedArgs, self.expectedKeywords, self._checkFailure, LoggingSleeper(self.log))
-    d.addCallbacks(self._logResult, self._logFailure)
-    d.addCallback(self.checkLog, expectedLog)
-    return d
+    try:
+      value = yield retry.retryCall(
+          self._function, self.expectedArgs, self.expectedKeywords, self._checkFailure, LoggingSleeper(self.log))
+      self.log.append(value)
+    except Exception: # pylint: disable=W0703
+      self.log.append('failed')
+    self.assertEquals(expectedLog, self.log)
 
 
   def testWorksOnFirstTry(self):
