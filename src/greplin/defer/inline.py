@@ -27,7 +27,16 @@ def callbacks(fn):
   @functools.wraps(fn)
   def call(*args, **kwargs):
     """The new function."""
-    return InlinedCallbacks(fn(*args, **kwargs)).deferred
+    d = InlinedCallbacks(fn(*args, **kwargs)).deferred
+    if d.called:
+      if isinstance(d.result, failure.Failure):
+        f = d.result
+        d.addErrback(lambda _: None) # Eat the error so we don't get Unhandled Error In Deferred.
+        f.raiseException()
+      else:
+        return d.result
+    else:
+      return d
 
   return call
 

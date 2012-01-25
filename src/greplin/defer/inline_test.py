@@ -71,9 +71,34 @@ class InlineCallbacksTest(unittest.TestCase):
       """Simple asynchronous function that has instant results for a large number of yields."""
       for i in xrange(1000):
         yield i
+      yield time.sleep(0.01) # Make it actually async.
       defer.returnValue('done')
 
     return instantYields().addBoth(lambda result: self.assertEqual('done', result))
+
+
+  def testSynchronous(self):
+    """Tests handling of synchronous results."""
+
+    @inline.callbacks
+    def synchronousResult():
+      """Simple asynchronous function that is not really asynchronous."""
+      yield 100
+      defer.returnValue(200)
+
+    self.assertEqual(200, synchronousResult())
+
+
+  def testSynchronousFailure(self):
+    """Tests handling of synchronous failures."""
+
+    @inline.callbacks
+    def synchronousFailure():
+      """Simple asynchronous function that is not really asynchronous."""
+      yield 100
+      raise ValueError
+
+    self.assertRaises(ValueError, synchronousFailure)
 
 
   def testYieldValues(self):
