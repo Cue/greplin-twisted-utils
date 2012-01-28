@@ -48,7 +48,7 @@ class DeferredMap(dict):
     self.__loading[key].append(result)
 
     if isNewRequest:
-      self.__fn(key).addBoth(self.__gotResult, key)
+      defer.maybeDeferred(self.__fn, key).addBoth(self.__gotResult, key)
 
     return result
 
