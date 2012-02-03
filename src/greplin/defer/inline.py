@@ -53,7 +53,7 @@ STATE_CANCELLED = 2
 class InlinedCallbacks(object):
   """Class to maintain state for an inlined callback."""
 
-  __slots__ = ('_current', 'deferred', '_generator', '_state', '_creationStack')
+  __slots__ = ('_current', 'deferred', '_generator', '_state')
 
 
   def __init__(self, generator):
