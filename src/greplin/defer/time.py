@@ -14,6 +14,8 @@
 
 """Time utility functions."""
 
+from greplin.defer import base
+
 from twisted.internet import defer
 
 import random
@@ -24,20 +26,29 @@ def sleep(seconds):
   Returns a deferred that will call after the specified number of seconds
   have passed. It callsback with True to indicate cancellation.
   """
+  return Sleep(seconds)
 
-  delayedCall = None
 
-  def _canceller(deferred):
-    """Cancels the delayed callback"""
-    delayedCall.cancel()
-    deferred.callback(True)
 
-  deferred = defer.Deferred(_canceller)
+# pylint is just wrong about this being an old style class.  # pylint: disable=E1001
+class Sleep(base.LowMemoryDeferred):
+  """Sleep object."""
 
-  from twisted.internet import reactor
-  delayedCall = reactor.callLater(seconds, deferred.callback, None)
+  __slots__ = ('_delayedCall',)
 
-  return deferred
+
+  def __init__(self, seconds):
+    base.LowMemoryDeferred.__init__(self)
+
+    from twisted.internet import reactor
+    self._delayedCall = reactor.callLater(seconds, self.callback, None)
+
+
+  def cancel(self):
+    """Stops sleeping."""
+    self._delayedCall.cancel()
+    self.callback(True)
+
 
 
 def timeoutDeferred(seconds, deferred):
