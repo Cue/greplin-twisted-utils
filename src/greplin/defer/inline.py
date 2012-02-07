@@ -50,6 +50,14 @@ STATE_CANCELLED = 2
 
 
 
+# We (sadly) actually save quite a bit of memory by always using the same empty dict and tuple objects.
+
+EMPTY_TUPLE = tuple()
+
+EMPTY_DICT = dict()
+
+
+
 class InlinedCallbacks(object):
   """Class to maintain state for an inlined callback."""
 
@@ -104,7 +112,8 @@ class InlinedCallbacks(object):
         # A deferred was yielded, get the result.
         self._current = result
         self._state = STATE_WAITING
-        result.addBoth(self._handleResult)
+        cb = self._handleResult
+        result.addCallbacks(cb, cb, EMPTY_TUPLE, EMPTY_TUPLE, EMPTY_DICT, EMPTY_DICT)
         if self._state == STATE_WAITING:
           # Haven't called back yet, set flag so that we get reinvoked and return from the loop.
           self._state = STATE_NORMAL
