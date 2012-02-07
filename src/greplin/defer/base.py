@@ -33,3 +33,18 @@ class LowMemoryDeferred(object, defer.Deferred):
       setattr(self, attr, getattr(defer.Deferred, attr))
     self.result = None
     defer.Deferred.__init__(self, *args)
+
+
+
+def describeDeferred(d):
+  """Provide a textual description of a Deferred instance."""
+  if isinstance(d, defer.Deferred):
+    if hasattr(d, 'describeDeferred'):
+      result = d.describeDeferred()
+    else:
+      result = 'Deferred(%x)' % id(d)
+    if d.called:
+      result = '*' + result
+    return result
+  else:
+    return repr(d)

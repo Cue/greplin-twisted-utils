@@ -50,6 +50,11 @@ class Sleep(base.LowMemoryDeferred):
     self.callback(True)
 
 
+  def describeDeferred(self):
+    """Describes this Deferred."""
+    return 'sleep(%f)' % self._delayedCall.time
+
+
 
 def timeoutDeferred(seconds, deferred):
   """Returns a new deferred that returns the results of the first deferred, or errs back if on timeout."""
