@@ -15,13 +15,13 @@
 """Tests for the inline.callbacks utility function."""
 
 from greplin.defer import inline, time
+from greplin.testing import base
 
 from twisted.internet import defer
-from twisted.trial import unittest
 
 
 
-class InlineCallbacksTest(unittest.TestCase):
+class InlineCallbacksTest(base.BaseDeferredTest):
   """Tests for inlineCallbacks."""
 
 
