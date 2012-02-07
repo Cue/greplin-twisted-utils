@@ -14,6 +14,8 @@
 
 """Decorator to make asyncronous code look synchronous.  See twisted.internet.defer.inlineCallbacks."""
 
+from greplin.defer import base
+
 from twisted.internet import defer
 from twisted.python import failure
 
@@ -27,7 +29,7 @@ def callbacks(fn):
   @functools.wraps(fn)
   def call(*args, **kwargs):
     """The new function."""
-    d = InlinedCallbacks(fn(*args, **kwargs)).deferred
+    d = InlinedCallbacks(fn(*args, **kwargs))
     if d.called:
       if isinstance(d.result, failure.Failure):
         f = d.result
@@ -58,25 +60,32 @@ EMPTY_DICT = dict()
 
 
 
-class InlinedCallbacks(object):
+# pylint is just wrong about this being an old style class.  # pylint: disable=E1001
+class InlinedCallbacks(base.LowMemoryDeferred):
   """Class to maintain state for an inlined callback."""
 
-  __slots__ = ('_current', 'deferred', '_generator', '_state')
+  __slots__ = ('_current', '_generator', '_state')
 
 
   def __init__(self, generator):
+    base.LowMemoryDeferred.__init__(self)
     self._generator = generator
-    self.deferred = defer.Deferred(self._canceller)
     self._state = STATE_NORMAL
     self._current = None
     self._step(None)
 
 
-  def _canceller(self, _):
+  def __canceller(self, _):
     """Cancel this Deferred by cancelling the current Deferred it's waiting on."""
     self._state = STATE_CANCELLED
     if self._current:
       self._current.cancel()
+
+
+  def cancel(self):
+    """Custom cancel method that only bind the canceller when it's about to be used."""
+    self._canceller = self.__canceller # Here it's worth it to reference the parent var.  # pylint: disable=W0201
+    base.LowMemoryDeferred.cancel(self)
 
 
   def _step(self, result):
@@ -98,14 +107,14 @@ class InlinedCallbacks(object):
       except StopIteration:
         # Fell off the end, or "return" statement
         if self._state != STATE_CANCELLED:
-          self.deferred.callback(None)
+          self.callback(None)
         return
       except defer._DefGen_Return, e: # Need to access protected member for consistency. # pylint: disable=W0212
         if self._state != STATE_CANCELLED:
-          self.deferred.callback(e.value)
+          self.callback(e.value)
         return
       except:
-        self.deferred.errback()
+        self.errback()
         return
 
       if self._state == STATE_NORMAL and isinstance(result, defer.Deferred):
