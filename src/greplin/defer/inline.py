@@ -139,3 +139,21 @@ class InlinedCallbacks(base.LowMemoryDeferred):
       self._current = result
     else:
       self._step(result)
+
+
+  @property
+  def current(self):
+    """Returns the deferred this deferred is waiting on."""
+    return self._current
+
+
+  @property
+  def generator(self):
+    """Returns the underlying generator."""
+    return self._generator
+
+
+  @property
+  def state(self):
+    """Returns the current state of this inline callbacks object."""
+    return self._state
