@@ -14,7 +14,11 @@
 
 """Lower memory verion of a Deferred object."""
 
+from __future__ import absolute_import
+
 from twisted.internet import defer
+
+import time
 
 
 DEFERRED_ATTRIBUTES = tuple([name for name in dir(defer.Deferred)
@@ -25,13 +29,14 @@ DEFERRED_ATTRIBUTES = tuple([name for name in dir(defer.Deferred)
 class LowMemoryDeferred(object, defer.Deferred):
   """Lower memory verion of a Deferred object."""
 
-  __slots__ = DEFERRED_ATTRIBUTES + ('callbacks', '_canceller', 'result')
+  __slots__ = DEFERRED_ATTRIBUTES + ('callbacks', '_canceller', 'result', 'startTime')
 
 
   def __init__(self, *args):
     for attr in DEFERRED_ATTRIBUTES:
       setattr(self, attr, getattr(defer.Deferred, attr))
     self.result = None
+    self.startTime = time.time()
     defer.Deferred.__init__(self, *args)
 
 
@@ -45,6 +50,8 @@ def describeDeferred(d):
       result = 'Deferred(%x)' % id(d)
     if d.called:
       result = '*' + result
+    if isinstance(d, LowMemoryDeferred):
+      result = '[%0.1fs] %s' % (time.time() - d.startTime, result)
     return result
   else:
     return repr(d)
