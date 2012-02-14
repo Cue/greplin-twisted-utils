@@ -35,7 +35,7 @@ class LowMemoryDeferred(object, defer.Deferred):
   def __init__(self, *args):
     for attr in DEFERRED_ATTRIBUTES:
       setattr(self, attr, getattr(defer.Deferred, attr))
-    self.result = None
+    self.result = getattr(defer, '_NO_RESULT', None)
     self.startTime = time.time()
     defer.Deferred.__init__(self, *args)
 

@@ -51,6 +51,18 @@ class InlineCallbacksTest(base.BaseDeferredTest):
     return simple().addBoth(lambda result: self.assertEqual(5, result))
 
 
+  def testChain(self):
+    """Tests return of a chained value."""
+
+    @inline.callbacks
+    def chained():
+      """Simple asynchronous function that returns a value."""
+      result = yield time.sleep(0.01).addCallback(lambda _: time.sleep(0.01).addCallback(lambda _: 3.14))
+      defer.returnValue(result)
+
+    return chained().addBoth(lambda result: self.assertEqual(3.14, result))
+
+
   def testTuple(self):
     """Tests return of a tuple."""
 
