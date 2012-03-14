@@ -215,3 +215,9 @@ class DeferredPriorityQueue(object):
       return d
     else:
       raise defer.QueueUnderflow()
+
+
+  def clear(self):
+    """Clear this queue."""
+    if self.pending:
+      self.pending = []
