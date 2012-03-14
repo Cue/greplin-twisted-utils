@@ -130,3 +130,88 @@ class MaxSizeDeferredQueueTest(unittest.TestCase):
       'callback shift',
       'result: None'
     ], self.log)
+
+
+
+class DeferredPriorityQueueTest(unittest.TestCase):
+  """Tests for DeferredPriorityQueue."""
+
+
+  def setUp(self):
+    """Sets up the test."""
+    self.log = []
+    self.queue = queue.DeferredPriorityQueue(sortKey=lambda e: e)
+
+
+  def call(self, fn, *args):
+    """Calls the function with the given name and args and logs various related events."""
+    desc = ' '.join([fn] + list(args))
+    self.log.append(desc)
+    result = getattr(self.queue, fn)(*args)
+    if isinstance(result, defer.Deferred):
+      self.log.append('result: Deferred')
+      result.addCallback(lambda res: self.log.append('callback ' + desc + " returned " + res))
+    else:
+      self.log.append('result: %s' % result)
+
+
+  def testBasics(self):
+    """Test the basics of a deferred priority queue."""
+    self.call('get')
+    self.call('put', '1')
+    self.call('put', '2')
+    self.call('get')
+    self.call('put', '3')
+    self.call('put', '6')
+    self.call('put', '4')
+    self.call('put', '5')
+    self.call('get')
+    self.call('get')
+    self.call('put', '7')
+    self.call('put', '1')
+    self.call('get')
+    self.call('get')
+    self.call('get')
+    self.call('get')
+    self.assertEquals([
+       "get",
+       "result: Deferred",
+       "put 1",
+       "callback get returned 1",
+       "result: None",
+       "put 2",
+       "result: None",
+       "get",
+       "result: Deferred",
+       "callback get returned 2",
+       "put 3",
+       "result: None",
+       "put 6",
+       "result: None",
+       "put 4",
+       "result: None",
+       "put 5",
+       "result: None",
+       "get",
+       "result: Deferred",
+       "callback get returned 3",
+       "get",
+       "result: Deferred",
+       "callback get returned 4",
+       "put 7",
+       "result: None",
+       "put 1",
+       "result: None",
+       "get",
+       "result: Deferred",
+       "callback get returned 1",
+       "get",
+       "result: Deferred",
+       "callback get returned 5",
+       "get",
+       "result: Deferred",
+       "callback get returned 6",
+       "get",
+       "result: Deferred",
+       "callback get returned 7"
+      ], self.log)
