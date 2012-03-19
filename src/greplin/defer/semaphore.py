@@ -54,7 +54,10 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): #pylint: disable=W
 
     @param d: The deferred that has been canceled.
     """
-    self.waiting.remove(d)
+    for e in self.waiting:
+      if e[1] == d:
+        self.waiting.remove(e)
+        break
     #TODO - Improve from O(n * log(n))
     heapq.heapify(self.waiting)
 
