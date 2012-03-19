@@ -181,6 +181,8 @@ class DeferredPriorityQueue(object):
     @param d: The deferred that has been canceled.
     """
     self.waiting.remove(d)
+    #TODO - Improve this from O(n * log(n))
+    heapq.heapify(self.waiting)
 
 
   def put(self, obj):
