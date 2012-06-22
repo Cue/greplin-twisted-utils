@@ -63,6 +63,7 @@ def getSharedDbPool(dbapiName, host, db, user, password, minConnections, maxConn
         cp_reconnect = True,
         cp_min = minConnections,
         cp_max = maxConnections,
-        use_unicode = True)
+        use_unicode = True,
+        init_command='SET NAMES utf8')
 
   return POOLS[key]
