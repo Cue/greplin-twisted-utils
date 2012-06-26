@@ -65,13 +65,14 @@ class Context(object):
 
   def __enter__(self):
     """Enters this context."""
-    self.parent = self.parent or Context.currentContext
+    self.parent = Context.currentContext
     Context.currentContext = self
 
 
   def __exit__(self, *_):
     """Leaves this context."""
     Context.currentContext = self.parent
+    self.parent = None
 
 
 
@@ -88,8 +89,11 @@ def wrapped(fn):
 
   def wrappedFn(*args, **kw):
     """Wrapped version of the function."""
-    with context:
-      fn(*args, **kw)
+    old = Context.currentContext
+    Context.currentContext = context
+    fn(*args, **kw)
+    Context.currentContext = old
+
 
   return wrappedFn
 
@@ -122,8 +126,10 @@ class ContextTrackingReactor(BaseReactor):
   def _doReadOrWrite(self, selectable, *args, **kw):
     """Overrides _doReadOrWrite to restore the context at the time of selectable creation."""
     # pylint: disable=W0212
-    with selectable.__context:
-      BaseReactor._doReadOrWrite(self, selectable, *args, **kw)
+    old = Context.currentContext
+    Context.currentContext = selectable.__context
+    BaseReactor._doReadOrWrite(self, selectable, *args, **kw)
+    Context.currentContext = old
 
 
   def callLater(self, _seconds, _f, *args, **kw):
