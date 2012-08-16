@@ -65,8 +65,7 @@ class ADeferToThreadContextTest(BaseDeferredTest):
 
 
   @inline.callbacks
-  def testDGoesAfterTheContextIsRestoredTest(self):
+  def testContextIsRestoredWhenExceptionsThrownZ(self):
     """This is actually confirmation that testContextIsRestoredWhenExceptionsThrown didn't much about in the parent
-    context. The D in the test name is to ensure it goes afterwards."""
+    context. The Z in the test name is to ensure it goes afterwards."""
     yield self.assertRaises(KeyError, context.get, 'foo')
-
