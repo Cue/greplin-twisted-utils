@@ -110,6 +110,7 @@ class ContextTrackingReactor(BaseReactor):
 
   def addReader(self, reader):
     """Overrides addReader to attach the current context."""
+    # This accesses private variables on purpose
     # pylint: disable=W0212
     reader.__context = Context.currentContext
     BaseReactor.addReader(self, reader)
@@ -117,6 +118,7 @@ class ContextTrackingReactor(BaseReactor):
 
   def addWriter(self, writer):
     """Overrides addWriter to attach the current context."""
+    # This accesses private variables on purpose
     # pylint: disable=W0212
     writer.__context = Context.currentContext
     BaseReactor.addWriter(self, writer)
