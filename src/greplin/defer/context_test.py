@@ -50,7 +50,10 @@ class ADeferToThreadContextTest(BaseDeferredTest):
 
   @inline.callbacks
   def testContextIsRestoredWhenExceptionsThrown(self):
-    """When an error occurs in a deferred, context should be restored appropriately"""
+    """
+    When an error occurs in a deferred, context should be restored appropriately
+    This test has a follow up (testD..) that imposes an ordering requirement based on method name.
+    """
     self.assertFalse(context.has('foo'))
     try:
       with context.set(foo='bar'):
