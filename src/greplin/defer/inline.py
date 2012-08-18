@@ -14,7 +14,7 @@
 
 """Decorator to make asyncronous code look synchronous.  See twisted.internet.defer.inlineCallbacks."""
 
-from greplin.defer import base
+from greplin.defer import base, context
 
 from twisted.internet import defer
 from twisted.python import failure
@@ -29,7 +29,11 @@ def callbacks(fn):
   @functools.wraps(fn)
   def call(*args, **kwargs):
     """The new function."""
+    # Save and restore the context afterwards so fn() doesn't interfere with other deferreds
+    current = context.current()
     d = InlinedCallbacks(fn(*args, **kwargs))
+    context.setCurrent(current)
+
     if d.called:
       if isinstance(d.result, failure.Failure):
         f = d.result
@@ -64,7 +68,7 @@ EMPTY_DICT = dict()
 class InlinedCallbacks(base.LowMemoryDeferred):
   """Class to maintain state for an inlined callback."""
 
-  __slots__ = ('_current', '_generator', '_state')
+  __slots__ = ('_current', '_generator', '_state', '_context')
 
 
   def __init__(self, generator):
@@ -72,6 +76,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
     self._generator = generator
     self._state = STATE_NORMAL
     self._current = None
+    self._context = context.current()
     self._step(None)
 
 
@@ -111,6 +116,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
         return
       except defer._DefGen_Return, e: # Need to access protected member for consistency. # pylint: disable=W0212
         if self._state != STATE_CANCELLED:
+          context.setCurrent(self._context)
           self.callback(e.value)
         return
       except:
