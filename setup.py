@@ -26,7 +26,7 @@ setup(name='greplin-twisted-utils',
       license='Apache',
       author='Greplin, Inc.',
       author_email='opensource@greplin.com',
-      url='http://www.github.com/Greplin/greplin-twisted-utilities',
+      url='https://www.github.com/Cue/greplin-twisted-utilities',
       package_dir = {'':'src'},
       packages = [
         'greplin',
