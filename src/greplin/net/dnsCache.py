@@ -30,9 +30,10 @@ class CachingDNS(object):
   implements(interfaces.IResolverSimple)
 
 
-  def __init__(self, original, timeout = 60):
+  def __init__(self, original, timeout = 60, useFallback = True):
     self._original = original
     self._timeout = timeout
+    self._fallback = {} if useFallback else None
     self._cache = lazymap.DeferredMap(self.__fetchHost)
 
 
@@ -49,12 +50,17 @@ class CachingDNS(object):
       if isinstance(self._cache[key], Failure):
         del self._cache[key]
       # Check for a cache hit.
-      elif time.time() > self._cache[key][1] + self._timeout:
+      elif time.time() >= self._cache[key][1] + self._timeout:
         # Ensure the item hasn't expired.
+        if self._fallback is not None:
+          self._fallback[key] = self._cache[key][0]
         del self._cache[key]
       else:
         # If the item is in cache and not expired, return it immediately.
         return defer.succeed(self._cache[key][0])
 
     # If it wasn't already in the cache, this always returns a deferred.
-    return self._cache[key].addCallback(lambda x: x[0])
+    result = self._cache[key].addCallback(lambda x: x[0])
+    if self._fallback and key in self._fallback:
+      result.addErrback(lambda _: self._fallback[key])
+    return result
