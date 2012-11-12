@@ -31,7 +31,10 @@ def callbacks(fn):
     """The new function."""
     # Save and restore the context afterwards so fn() doesn't interfere with other deferreds
     current = context.current()
-    d = InlinedCallbacks(fn(*args, **kwargs))
+    reprFn = None
+    if args[:1] and hasattr(args[0], 'describeDeferred'):
+      reprFn = args[0].describeDeferred
+    d = InlinedCallbacks(fn(*args, **kwargs), reprFn)
     context.setCurrent(current)
 
     if d.called:
@@ -71,13 +74,14 @@ class InlinedCallbacks(base.LowMemoryDeferred):
   __slots__ = ('_current', '_generator', '_state', '_context')
 
 
-  def __init__(self, generator):
+  def __init__(self, generator, reprFn=None):
     base.LowMemoryDeferred.__init__(self)
     self._generator = generator
     self._state = STATE_NORMAL
     self._current = None
     self._context = context.current()
     self._step(None)
+    self._reprFn = reprFn
 
 
   def __canceller(self, _):
@@ -149,4 +153,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
 
   def describeDeferred(self):
     """Describes this Deferred."""
-    return '%s:%s -> %s' % (self._generator.__name__, self._state, base.describeDeferred(self._current))
+    if self._reprFn:
+      return '%s:%s -> %s' % (self._reprFn(), self._state, base.describeDeferred(self._current))
+    else:
+      return '%s:%s -> %s' % (self._generator.__name__, self._state, base.describeDeferred(self._current))
