@@ -154,6 +154,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
   def describeDeferred(self):
     """Describes this Deferred."""
     if self._reprFn:
-      return '%s:%s -> %s' % (self._reprFn(), self._state, base.describeDeferred(self._current))
+      return '%s (%s):%s -> %s' % (self._generator.__name__, self._reprFn(), self._state,
+                                   base.describeDeferred(self._current))
     else:
       return '%s:%s -> %s' % (self._generator.__name__, self._state, base.describeDeferred(self._current))
