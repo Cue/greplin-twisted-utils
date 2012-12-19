@@ -27,7 +27,7 @@ DEFERRED_ATTRIBUTES = tuple([name for name in dir(defer.Deferred)
 
 
 class LowMemoryDeferred(object, defer.Deferred):
-  """Lower memory verion of a Deferred object."""
+  """Lower memory version of a Deferred object."""
 
   __slots__ = DEFERRED_ATTRIBUTES + ('callbacks', '_canceller', 'result', 'startTime')
 
