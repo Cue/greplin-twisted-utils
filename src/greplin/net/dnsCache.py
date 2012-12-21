@@ -21,6 +21,7 @@ from twisted.python.failure import Failure
 
 from zope.interface import implements
 
+import collections
 import time
 
 
@@ -35,11 +36,33 @@ class CachingDNS(object):
     self._timeout = timeout
     self._fallback = {} if useFallback else None
     self._cache = lazymap.DeferredMap(self.__fetchHost)
+    self._stats = {
+      'miss': collections.defaultdict(int),
+      'hit': collections.defaultdict(int),
+      'error': collections.defaultdict(int),
+      'fallback': collections.defaultdict(int),
+    }
 
 
   def __fetchHost(self, args):
     """Actually fetches the host name."""
     return self._original.getHostByName(*args).addCallback(lambda x: (x, time.time()))
+
+
+  def __fallback(self, err, key):
+    """Returns the fallback for the given key."""
+    try:
+      result = self._fallback[key]
+      self._stats['fallback'][str(key)] += 1
+      return result
+    except KeyError:
+      self._stats['error'][str(key)] += 1
+      return err
+
+
+  def getStats(self):
+    """Gets stats about hits / misses / failures."""
+    return self._stats
 
 
   def getHostByName(self, name, *args):
@@ -57,10 +80,10 @@ class CachingDNS(object):
         del self._cache[key]
       else:
         # If the item is in cache and not expired, return it immediately.
+        self._stats['hit'][str(key)] += 1
         return defer.succeed(self._cache[key][0])
 
     # If it wasn't already in the cache, this always returns a deferred.
-    result = self._cache[key].addCallback(lambda x: x[0])
-    if self._fallback and key in self._fallback:
-      result.addErrback(lambda _: self._fallback[key])
+    result = self._cache[key].addCallback(lambda x: x[0]).addErrback(self.__fallback, key)
+    self._stats['miss'][str(key)] += 1
     return result

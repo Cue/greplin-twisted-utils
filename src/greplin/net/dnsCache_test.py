@@ -48,6 +48,24 @@ class CachingDNSTest(unittest.TestCase):
     mox.Verify(original)
 
 
+  def testFallbackFailsFirstTime(self):
+    """Test a cache with fallback."""
+    original = mox.MockAnything()
+    original.getHostByName('google.com').AndReturn(
+        defer.fail(failure.Failure(error.DNSLookupError('Fake DNS failure'))))
+    original.getHostByName('google.com').AndReturn(
+        defer.succeed('1.2.3.4'))
+    mox.Replay(original)
+
+    cache = dnsCache.CachingDNS(original, timeout = 1)
+    result = cache.getHostByName('google.com')
+    self.assertTrue(isinstance(result.result, failure.Failure))
+    result.addErrback(lambda _: None) # Consume the error.
+    result = cache.getHostByName('google.com')
+    self.assertEquals(result.result, '1.2.3.4')
+    mox.Verify(original)
+
+
   def testNoFallback(self):
     """Test a cache with fallback."""
     original = mox.MockAnything()
