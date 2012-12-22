@@ -101,6 +101,13 @@ class SleepManager(object):
     delayTime = self.delay
     if self.__jitter:
       delayTime += random.random() * self.__jitter
+    if not delayTime:
+      return defer.succeed(None)
     d = sleep(delayTime)
     self.delay = min(self.delay + self.__increment, self.__maxSleep)
     return d
+
+
+  def clone(self):
+    """Clones this object."""
+    return SleepManager(self.__minSleep, self.__maxSleep, self.__increment, self.__jitter)
