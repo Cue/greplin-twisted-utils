@@ -69,6 +69,7 @@ def _runOne(fn, args, kw, out, queue):
 def _getThread():
   """Lazy loads the eventlet thread."""
   thread = threading.Thread(target = _loop)
+  thread.name = 'twistlet'
   thread.daemon = True # We have to set this to true since tests don't cleanly shut down the reactor.
   thread.start()
   reactor.addSystemEventTrigger('during', 'shutdown', _stopThread)
