@@ -21,21 +21,17 @@ import heapq
 
 
 
-class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): #pylint: disable=W0212
+class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=W0212
   """
   A semaphore for event driven systems.
 
   @ivar tokens: At most this many users may acquire this semaphore at
       once.
   @type tokens: C{int}
-
-  @ivar limit: The difference between C{tokens} and the number of users
-      which have currently acquired this semaphore.
-  @type limit: C{int}
   """
 
   def __init__(self, tokens):
-    defer._ConcurrencyPrimitive.__init__(self) #pylint: disable=W0212
+    defer._ConcurrencyPrimitive.__init__(self) # pylint: disable=W0212
     if tokens < 1:
       raise ValueError("DeferredSemaphore requires tokens >= 1")
     self.tokens = tokens
@@ -57,7 +53,7 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): #pylint: disable=W
     for e in self.waiting:
       if e[1] == d:
         self.waiting.remove(e)
-        #TODO - Improve from O(n * log(n))
+        # TODO - Improve from O(n * log(n))
         heapq.heapify(self.waiting)
         break
 
@@ -76,7 +72,7 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): #pylint: disable=W
     if not self.tokens:
       heapq.heappush(self.waiting, (priority, d))
     else:
-      self.tokens = self.tokens - 1
+      self.tokens -= 1
       d.callback(self)
     return d
 
@@ -89,10 +85,9 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): #pylint: disable=W
     resource is free.
     """
     assert self.tokens < self.limit, "Someone released me too many times: too many tokens!"
-    self.tokens = self.tokens + 1
+    self.tokens += 1
     if self.waiting:
       # someone is waiting to acquire token
-      self.tokens = self.tokens - 1
+      self.tokens -= 1
       _, d = heapq.heappop(self.waiting)
       d.callback(self)
-
