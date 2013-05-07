@@ -50,9 +50,11 @@ class PrioritySemaphoreTest(unittest.TestCase):
     """Tests the description of the Deferred objects from the semaphore."""
     d = [self.queue.acquire(i * 2) for i in range(5)]
     self.assertEqual(
-        '*DeferredPrioritySemaphore(@%x, #1/5, priority=0, waiting=2)' % id(d[0]), base.describeDeferred(d[0]))
+        '*DeferredPrioritySemaphore(@%x, #1/5, priority=0, waiting=2)' % id(d[0]),
+        base.describeDeferred(d[0]).partition(' ')[2]) # split off the active time
     self.assertEqual(
-        'DeferredPrioritySemaphore(@%x, #5/5, priority=8, waiting=2)' % id(d[4]), base.describeDeferred(d[4]))
+        'DeferredPrioritySemaphore(@%x, #5/5, priority=8, waiting=2)' % id(d[4]),
+        base.describeDeferred(d[4]).partition(' ')[2]) # split off the active time
 
 
   def testBasics(self):

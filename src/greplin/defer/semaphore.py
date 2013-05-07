@@ -14,7 +14,7 @@
 
 """Priority Deferred Semaphore object."""
 
-
+from greplin.defer import base
 from twisted.internet import defer
 
 import functools
@@ -69,7 +69,7 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=
     @return: a L{Deferred} which fires on token acquisition.
     """
     assert self.tokens >= 0, "Internal inconsistency?? Tokens should never be negative"
-    d = defer.Deferred(canceller=self._cancelAcquire)
+    d = base.LowMemoryDeferred(self._cancelAcquire)
     self.counter += 1
     d.describeDeferred = functools.partial(self._describe, d, self.counter, priority)
     if not self.tokens:
