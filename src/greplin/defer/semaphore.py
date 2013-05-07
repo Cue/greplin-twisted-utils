@@ -17,6 +17,7 @@
 
 from twisted.internet import defer
 
+import functools
 import heapq
 
 
@@ -36,6 +37,7 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=
       raise ValueError("DeferredSemaphore requires tokens >= 1")
     self.tokens = tokens
     self.limit = tokens
+    self.counter = 0
 
 
   def _cancelAcquire(self, d):
@@ -58,7 +60,6 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=
         break
 
 
-
   def acquire(self, priority=0):
     """
     Attempt to acquire the token.
@@ -69,8 +70,10 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=
     """
     assert self.tokens >= 0, "Internal inconsistency?? Tokens should never be negative"
     d = defer.Deferred(canceller=self._cancelAcquire)
+    self.counter += 1
+    d.describeDeferred = functools.partial(self._describe, d, self.counter, priority)
     if not self.tokens:
-      heapq.heappush(self.waiting, (priority, d))
+      heapq.heappush(self.waiting, (priority, self.counter, d))
     else:
       self.tokens -= 1
       d.callback(self)
@@ -89,5 +92,11 @@ class DeferredPrioritySemaphore(defer._ConcurrencyPrimitive): # pylint: disable=
     if self.waiting:
       # someone is waiting to acquire token
       self.tokens -= 1
-      _, d = heapq.heappop(self.waiting)
+      _, __, d = heapq.heappop(self.waiting)
       d.callback(self)
+
+
+  def _describe(self, d, counter, priority):
+    """Describe the given deferred."""
+    return 'DeferredPrioritySemaphore(@%x, #%d/%d, priority=%d, waiting=%d)' % (
+        id(d), counter, self.counter, priority, len(self.waiting))

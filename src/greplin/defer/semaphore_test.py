@@ -14,7 +14,7 @@
 
 """Tests for deferred semaphores."""
 
-from greplin.defer import semaphore
+from greplin.defer import base, semaphore
 
 from twisted.internet import defer
 
@@ -44,6 +44,15 @@ class PrioritySemaphoreTest(unittest.TestCase):
       result.addCallback(lambda _: self.log.append('callback ' + desc))
     else:
       self.log.append('result: %s' % result)
+
+
+  def testDescription(self):
+    """Tests the description of the Deferred objects from the semaphore."""
+    d = [self.queue.acquire(i * 2) for i in range(5)]
+    self.assertEqual(
+        '*DeferredPrioritySemaphore(@%x, #1/5, priority=0, waiting=2)' % id(d[0]), base.describeDeferred(d[0]))
+    self.assertEqual(
+        'DeferredPrioritySemaphore(@%x, #5/5, priority=8, waiting=2)' % id(d[4]), base.describeDeferred(d[4]))
 
 
   def testBasics(self):
