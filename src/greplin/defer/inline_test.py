@@ -138,3 +138,32 @@ class InlineCallbacksTest(base.BaseDeferredTest):
     c.callback((3, 4))
     self.assertTrue(out.called)
     self.assertEqual(10, out.result)
+
+
+  @inline.callbacks
+  def simpleAsyncMethod(self, value):
+    """Simple asynchronous method that returns a given value."""
+    yield time.sleep(0.01)
+    defer.returnValue(value)
+
+
+  def testDescribeInlineDeferredFunction(self):
+    """Test debugging descriptions of inline deferred functions."""
+
+    @inline.callbacks
+    def simple():
+      """Simple asynchronous function."""
+      yield time.sleep(0.01)
+      defer.returnValue(200)
+
+    d = simple()
+    self.assertEquals(d.describeDeferred().partition(' -> ')[0], 'simple:0')
+    return d.addBoth(lambda result: self.assertEqual(200, result))
+
+
+  def testDescribeInlineDeferredMethod(self):
+    """Test debugging descriptions of inline deferred functions."""
+    d = self.simpleAsyncMethod(42)
+    self.assertEquals(d.describeDeferred().partition(' -> ')[0],
+                      'InlineCallbacksTest.simpleAsyncMethod:0')
+    return d.addBoth(lambda result: self.assertEqual(42, result))

@@ -26,6 +26,8 @@ import functools
 def callbacks(fn):
   """Decorator to make asyncronous code look synchronous.  See twisted.internet.defer.inlineCallbacks."""
 
+  isMethod = fn.__code__.co_varnames[:1] == ('self',)   # Is this a method?
+
   @functools.wraps(fn)
   def call(*args, **kwargs):
     """The new function."""
@@ -34,7 +36,13 @@ def callbacks(fn):
     reprFn = None
     if args[:1] and hasattr(args[0], 'describeDeferred'):
       reprFn = args[0].describeDeferred
-    d = InlinedCallbacks(fn(*args, **kwargs), reprFn)
+    className = None
+    if isMethod and args:
+      try:
+        className = args[0].__class__.__name__
+      except AttributeError:
+        pass
+    d = InlinedCallbacks(fn(*args, **kwargs), reprFn=reprFn, className=className)
     context.setCurrent(current)
 
     if d.called:
@@ -74,7 +82,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
   __slots__ = ('_current', '_generator', '_state', '_context')
 
 
-  def __init__(self, generator, reprFn=None):
+  def __init__(self, generator, reprFn=None, className=None):
     base.LowMemoryDeferred.__init__(self)
     self._generator = generator
     self._state = STATE_NORMAL
@@ -82,6 +90,7 @@ class InlinedCallbacks(base.LowMemoryDeferred):
     self._context = context.current()
     self._step(None)
     self._reprFn = reprFn
+    self._className = className
 
 
   def __canceller(self, _):
@@ -153,8 +162,11 @@ class InlinedCallbacks(base.LowMemoryDeferred):
 
   def describeDeferred(self):
     """Describes this Deferred."""
+    generatorName = self._generator.__name__
+    if self._className is not None:
+      generatorName = self._className + '.' + generatorName
     if self._reprFn:
-      return '%s (%s):%s -> %s' % (self._generator.__name__, self._reprFn(), self._state,
+      return '%s (%s):%s -> %s' % (generatorName, self._reprFn(), self._state,
                                    base.describeDeferred(self._current))
     else:
-      return '%s:%s -> %s' % (self._generator.__name__, self._state, base.describeDeferred(self._current))
+      return '%s:%s -> %s' % (generatorName, self._state, base.describeDeferred(self._current))
